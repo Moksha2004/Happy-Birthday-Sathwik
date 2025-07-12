@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Happy Birthday!</title>
+
+<!-- ==========  STYLES  ========== -->
+<style>
+  html,body{margin:0;padding:0;overflow:hidden}
+  canvas{display:block}
+
+  /* ------------- overlay ------------- */
+  #overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:32px;
+    background:linear-gradient(135deg,#ff9a9e 0%,#fad0c4 100%);
+    color:#fff;font-family:'Segoe UI',sans-serif;font-size:2.8em;
+    text-align:center;opacity:0;transition:opacity 1s;
+    pointer-events:none;                 /* re-enabled later */
+  }
+  /* radial glow */
+  #overlay::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(circle at center,
+               rgba(255,255,255,.15) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  /* subtle animated sparkle specks */
+  #overlay::after{
+    content:'';position:absolute;inset:0;
+    background-image:
+      radial-gradient(#ffffff55 2px,transparent 2px),
+      radial-gradient(#ffffff33 2px,transparent 2px);
+    background-size:40px 40px,60px 60px;
+    background-position:0 0,20px 20px;
+    pointer-events:none;
+    animation:drift 12s linear infinite;
+  }
+  @keyframes drift{from{transform:translateY(0)}to{transform:translateY(-60px)}}
+
+  #typedText{min-height:1.4em}
+
+  /* gift box */
+  .box{width:180px;height:180px;position:relative;cursor:pointer;
+       animation:bounce 2s infinite}
+  .box,.lid{background:#ff007a;border-radius:12px;
+            box-shadow:0 8px 20px rgba(0,0,0,.45)}
+  .lid{position:absolute;top:0;left:0;width:100%;height:38%;
+       transform-origin:top;transition:transform .7s}
+  .stripe{position:absolute;top:0;left:47%;width:6%;height:100%;
+          background:#fff;border-radius:3px}
+  @keyframes bounce{
+    0%,20%,60%,100%{transform:translateY(0)}
+    40%{transform:translateY(-18px)}80%{transform:translateY(-8px)}
+  }
+
+  /* replay btn */
+  #replayBtn{
+    padding:12px 28px;font-size:.5em;border:none;border-radius:8px;
+    background:#ff007a;color:#fff;cursor:pointer;transition:transform .25s;
+  }
+  #replayBtn:hover{transform:scale(1.08)}
+</style>
+
+<!-- ==========  LIBRARIES  ========== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/typed.js@2.0.16/dist/typed.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fireworks-js@2.10.8/dist/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+<div id="overlay"></div>
+
+<!-- ==========  MAIN SCRIPT  ========== -->
+<script>
+/* ------- SETTINGS ------- */
+const TARGET_POPS = 5;
+
+/* ------- GLOBALS ------- */
+let balloons=[],confettiParts=[],popped=0;
+let popSound,bgMusic;
+
+/* ------- BALLOON ------- */
+class Balloon{
+  constructor(first=false){this.reset(first);}
+  reset(first=false){
+    this.r=random(30,50);
+    this.x=random(this.r,width-this.r);
+    this.y=first?random(height):height+this.r;
+    this.speed=random(1,3);
+    this.col=color(random(255),random(255),random(255),200);
+  }
+  update(){this.y-=this.speed;if(this.y<-this.r)this.reset();}
+  draw(){
+    noStroke();fill(this.col);ellipse(this.x,this.y,this.r*.8,this.r);
+    stroke(50);line(this.x,this.y+this.r/2,this.x,this.y+this.r*1.4);
+  }
+  hit(mx,my){return dist(mx,my,this.x,this.y)<this.r*.5;}
+}
+
+/* ------- CONFETTI PARTICLE ------- */
+class Confetti{
+  constructor(x,y){
+    this.p=createVector(x,y);
+    this.v=p5.Vector.random2D().mult(random(2,6));
+    this.a=createVector(0,0.05);
+    this.c=color(random(255),random(255),random(255));
+    this.s=random(4,8);this.l=100;
+  }
+  update(){this.v.add(this.a);this.p.add(this.v);this.l--;}
+  draw(){noStroke();fill(this.c);rect(this.p.x,this.p.y,this.s,this.s);}
+  done(){return this.l<=0;}
+}
+
+/* ------- AUDIO ------- */
+function preload(){
+  popSound=new Howl({src:['pop.mp3']});
+  bgMusic =new Howl({src:['happy_birthday.mp3'],loop:true,volume:.5});
+}
+
+/* ------- P5 SETUP ------- */
+function setup(){
+  createCanvas(windowWidth,windowHeight);
+  for(let i=0;i<20;i++) balloons.push(new Balloon(true));
+  bgMusic.play();
+  textAlign(CENTER,CENTER);textFont('Segoe UI');
+}
+
+/* ------- DRAW LOOP ------- */
+function draw(){
+  background(30,144,255);       // sky
+  balloons.forEach(b=>{b.update();b.draw();});
+  for(let i=confettiParts.length-1;i>=0;i--){
+    confettiParts[i].update();confettiParts[i].draw();
+    if(confettiParts[i].done()) confettiParts.splice(i,1);
+  }
+  fill(255);noStroke();textSize(24);
+  text(`Pop ${popped}/${TARGET_POPS} balloons to see your gift!`,width/2,40);
+}
+
+/* ------- CLICK ------- */
+function mousePressed(){
+  for(let i=balloons.length-1;i>=0;i--){
+    if(balloons[i].hit(mouseX,mouseY)){
+      popSound.play();
+      for(let k=0;k<30;k++)confettiParts.push(new Confetti(balloons[i].x,balloons[i].y));
+      balloons.splice(i,1);popped++;
+      if(popped>=TARGET_POPS)showGift();
+      break;
+    }
+  }
+}
+
+/* ------- SHOW GIFT ------- */
+function showGift(){
+  noLoop();
+  const ov=document.getElementById('overlay');
+  ov.style.opacity=1;
+  ov.style.pointerEvents='auto';
+  ov.innerHTML=`
+    <div id="gift" class="box">
+      <div class="lid" id="lid"><div class="stripe"></div></div>
+      <div class="stripe"></div>
+    </div>
+    <div style="font-size:.4em">Click the gift!</div>
+  `;
+  document.getElementById('gift').onclick=openGift;
+}
+
+/* ------- OPEN GIFT ------- */
+function openGift(){
+  const lid=document.getElementById('lid');
+  const gift=document.getElementById('gift');
+  gift.onclick=null;
+  lid.style.transform='rotateX(-170deg)';
+  gift.style.transform='translateY(-50px)';
+  setTimeout(revealToast,700);
+}
+
+/* ------- FINALE ------- */
+function revealToast(){
+  dropExtraConfetti();
+  launchFireworks();
+
+  // 5-second confetti shower
+  const end = Date.now() + 5000;
+  (function frame(){
+    confetti({ particleCount:12,startVelocity:30,spread:360,
+               origin:{x:Math.random(),y:-0.1} });
+    if(Date.now()<end)requestAnimationFrame(frame);
+  })();
+
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=`
+    <div id="typedText"></div>
+    <button id="replayBtn">Replay 🔁</button>
+  `;
+  new Typed('#typedText',{
+    strings:[
+      'Happieeeeee Birthdayyyy, <b>Sathwik</b>! 🎉',
+      'May this year overflow with joy &amp; good learnings &amp zero bugs. 🥳🥳🥳',
+      'Now go eat dinner hehe! 🎂'
+    ],
+    typeSpeed:45,backSpeed:18,showCursor:false
+  });
+  document.getElementById('replayBtn').onclick=()=>location.reload();
+}
+
+function launchFireworks(){
+  const fw=new Fireworks.default(document.body,{
+    hue:{min:0,max:360},delay:{min:15,max:30},
+    rocketsPoint:50,particles:90,trace:7,explosion:6,
+    brightness:{min:50,max:80},mouse:{click:false}
+  });
+  fw.start();setTimeout(()=>fw.stop(),4500);
+}
+
+function dropExtraConfetti(){
+  for(let i=0;i<220;i++)
+    confettiParts.push(new Confetti(random(width),random(-100,0)));
+}
+
+/* ------- RESIZE ------- */
+function windowResized(){resizeCanvas(windowWidth,windowHeight);}
+</script>
+</body>
+</html>
